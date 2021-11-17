@@ -1,21 +1,25 @@
 const express = require('express');
+const { interfaces } = require('mocha');
 const router = express.Router();
+const mongoose = require('mongoose');
 
-const data = [
-  {id: 1, title: 'Finalize project', order: 1, completed: false, createdOn: new Date()},
-  {id: 2, title: 'Book ticket to London', order: 2, completed: false, createdOn: new Date()},
-  {id: 3, title: 'Finish last article', order: 3, completed: false, createdOn: new Date()},
-  {id: 4, title: 'Get a new t-shirt', order: 4, completed: false, createdOn: new Date()},
-  {id: 5, title: 'Create dinner reservation', order: 5, completed: false, createdOn: new Date()},
-];
+main().catch(err => console.log(err));
+let data = [];
+const Todo = mongoose.model('Todo', { _id: Number, title: String, order: Number, completed: Boolean, createdOn: Date });
+
+async function main() {
+  await mongoose.connect('mongodb://localhost:27017/tododb');
+  console.log("CONNECTION SUCCESS");
+  data = await Todo.find().exec();
+}
 
 router.get('/', function (req, res) {
   res.status(200).json(data);
 });
 
-router.get('/:id', function (req, res) {
+router.get('/:_id', function (req, res) {
   let found = data.find(function (item) {
-    return item.id === parseInt(req.params.id);
+    return item._id === parseInt(req.params._id);
   });
 
   if (found) {
@@ -26,14 +30,14 @@ router.get('/:id', function (req, res) {
 });
 
 router.post('/', function (req, res) {
-  let itemIds = data.map(item => item.id);
+  let itemIds = data.map(item => item._id);
   let orderNums = data.map(item => item.order);
 
   let newId = itemIds.length > 0 ? Math.max.apply(Math, itemIds) + 1 : 1;
   let newOrderNum = orderNums.length > 0 ? Math.max.apply(Math, orderNums) + 1 : 1;
 
   let newItem = {
-    id: newId,
+    _id: newId,
     title: req.body.title,
     order: newOrderNum,
     completed: false,
@@ -41,27 +45,30 @@ router.post('/', function (req, res) {
   };
 
   data.push(newItem);
-
+  const newOne = new Todo(newItem);
+  newOne.save().then(console.log("SAVED"));
   res.status(201).json(newItem);
 });
 
-router.put('/:id', function (req, res) {
+router.put('/:_id', function (req, res) {
   let found = data.find(function (item) {
-    return item.id === parseInt(req.params.id);
+    return item._id === parseInt(req.params._id);
   });
-
   if (found) {
     let updated = {
-      id: found.id,
-      title: req.body.title,
-      order: req.body.order,
-      completed: req.body.completed,
-      createdOn: req.body.createdOn
+      _id: found._id,
+      title: req.body.title ? req.body.title : found.title,
+      order: req.body.order ? req.body.order : found.order,
+      completed: req.body.completed ? req.body.completed : found.completed,
+      createdOn: req.body.createdOn ? req.body.createdOn : found.createdOn
     };
 
     let targetIndex = data.indexOf(found);
-
     data.splice(targetIndex, 1, updated);
+
+    Todo.findOneAndDelete({_id: req.params._id}).exec();
+    const updatedOne = new Todo(updated);
+    updatedOne.save().then(console.log("UPDATED"));
 
     res.sendStatus(204);
   } else {
@@ -69,17 +76,17 @@ router.put('/:id', function (req, res) {
   }
 });
 
-router.delete('/:id', function (req, res) {
+router.delete('/:_id', function (req, res) {
   let found = data.find(function (item) {
-    return item.id === parseInt(req.params.id);
+    return item._id === parseInt(req.params._id);
   });
 
   if (found) {
     let targetIndex = data.indexOf(found);
 
     data.splice(targetIndex, 1);
+    Todo.findOneAndDelete({_id: req.params._id}).exec();
   }
-
   res.sendStatus(204);
 });
 
